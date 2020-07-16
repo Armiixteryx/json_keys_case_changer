@@ -1,10 +1,14 @@
 [package]
 name = "json_keys_case_changer"
 description = "A Rust library using serde_json to change the case of the keys of an JSON object"
-licence = "MIT"
+licence = "MIT OR Apache-2.0"
 version = "0.1.0"
 authors = ["David Camperos <camperos.davidjosue@gmail.com>"]
 edition = "2018"
+readme = "README.md"
+repository = "https://github.com/Armiixteryx/json_keys_case_changer"
+categories = ["encoding"]
+keywords = ["json", "serde", "case", "converter", "keys"]
 
 [dependencies]
 serde_json = { version = "1.0.56", features = ["preserve_order"] }
