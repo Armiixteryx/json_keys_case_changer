@@ -3,7 +3,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 pub type JsonMap = Map<String, Value>;
-pub type RenameMap = HashMap<String, String>;
+pub type RenameMap<'a> = HashMap<&'a str, &'a str>;
 
 #[derive(Copy, Clone)]
 pub enum RenameBehavior {
@@ -25,7 +25,7 @@ pub struct CaseChanger<'a> {
     case: Case,
 
     /// Map of list of manual renames.
-    manual_renames: RenameMap,
+    manual_renames: RenameMap<'a>,
 
     /// Rename either by key or by value.
     rename_behavior: RenameBehavior,
@@ -42,7 +42,7 @@ impl<'a> CaseChanger<'a> {
         })
     }
 
-    pub fn with_manual_renames(&mut self, rename_list: RenameMap) {
+    pub fn with_manual_renames(&mut self, rename_list: RenameMap<'a>) {
         self.manual_renames = rename_list;
     }
 
@@ -138,18 +138,18 @@ impl<'a> CaseChanger<'a> {
         }
     }
 
-    fn determine_manual_case(
+    fn determine_manual_case<'b>(
         key: &'a str,
-        manual_renames: &RenameMap,
+        manual_renames: &'b RenameMap,
         rename_behavior: RenameBehavior,
-    ) -> Option<String> {
+    ) -> Option<&'b str> {
         match rename_behavior {
             RenameBehavior::ByKey => manual_renames
                 .get(key)
                 .and_then(|found| Some(found.to_owned())),
             RenameBehavior::ByValue => manual_renames
                 .iter()
-                .find(|(_, rename_value)| *rename_value == key)
+                .find(|(_, rename_value)| **rename_value == key)
                 .and_then(|(_, key)| Some(key.to_owned())),
         }
     }
