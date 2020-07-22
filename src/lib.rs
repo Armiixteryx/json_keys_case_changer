@@ -150,7 +150,7 @@ impl<'a> CaseChanger<'a> {
             RenameBehavior::ByValue => manual_renames
                 .iter()
                 .find(|(_, rename_value)| **rename_value == key)
-                .and_then(|(_, key)| Some(key.to_owned())),
+                .and_then(|(key, _)| Some(key.to_owned())),
         }
     }
 }
