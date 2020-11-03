@@ -154,3 +154,32 @@ impl<'a> CaseChanger<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use crate::*;
+
+    #[test]
+    fn root_array() {
+        let value = json!([{"myCamel": 1}, {"myCamel": 2}]);
+        let expected = json!([{"my_camel": 1}, {"my_camel": 2}]);
+
+        let case_changed = CaseChanger::new(&value, Case::Snake).unwrap().convert();
+
+        assert_eq!(expected, case_changed);
+    }
+
+    #[test]
+    fn array_of_strings_in_map() {
+        let value = json!({"anArray": ["ObjectOne", "ObjectTwo"]});
+
+        // We expect to keep the array of strings (value of key) without
+        // modifications.
+        let expected = json!({"an_array": ["ObjectOne", "ObjectTwo"]});
+
+        let case_changed = CaseChanger::new(&value, Case::Snake).unwrap().convert();
+
+        assert_eq!(expected, case_changed);
+    }
+}
