@@ -11,5 +11,5 @@ categories = ["encoding"]
 keywords = ["json", "serde", "case", "converter", "keys"]
 
 [dependencies]
-serde_json = { version = "1.0.56", features = ["preserve_order"] }
+serde_json = { version = "1.0.59", features = ["preserve_order"] }
 convert_case = "0.4.0"

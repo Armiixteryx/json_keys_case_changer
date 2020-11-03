@@ -19,7 +19,7 @@ impl Default for RenameBehavior {
 
 pub struct CaseChanger<'a> {
     /// The input JSON.
-    json_in: &'a JsonMap,
+    json_in: Value,
 
     /// The case to convert.
     case: Case,
@@ -32,10 +32,9 @@ pub struct CaseChanger<'a> {
 }
 
 impl<'a> CaseChanger<'a> {
-    pub fn new(json_obj: &'a serde_json::Value, new_case: Case) -> Result<Self, ()> {
-        let obj = json_obj.as_object().ok_or(())?;
+    pub fn new(json_obj: serde_json::Value, new_case: Case) -> Result<Self, ()> {
         Ok(Self {
-            json_in: obj,
+            json_in: json_obj,
             case: new_case,
             manual_renames: RenameMap::default(),
             rename_behavior: RenameBehavior::default(),
@@ -51,90 +50,99 @@ impl<'a> CaseChanger<'a> {
     }
 
     pub fn convert(&mut self) -> Value {
-        let mut json_out = JsonMap::new();
-
-        CaseChanger::<'a>::internal_convert(
-            self.json_in,
-            &mut json_out,
+        let json_out = CaseChanger::internal_convert(
+            self.json_in.clone(),
             self.case,
             &self.manual_renames,
             self.rename_behavior,
         );
 
-        Value::Object(json_out)
+        json_out
     }
 
     fn internal_convert(
-        actual_json: &'a JsonMap,
-        new_json: &mut JsonMap,
+        actual_json: Value,
         case: Case,
         manual_renames: &RenameMap,
         rename_behavior: RenameBehavior,
-    ) {
-        for (key, value) in actual_json.iter() {
-            match (key, value) {
-                (key, Value::Object(elem)) => {
-                    let mut inner_obj = Map::<String, Value>::new();
+    ) -> Value {
+        match actual_json {
+            Value::Array(arr) => {
+                let mut deep_arr: Vec<Value> = Vec::new();
 
-                    CaseChanger::<'a>::internal_convert(
-                        elem,
-                        &mut inner_obj,
+                for deep_value in arr {
+                    deep_arr.push(CaseChanger::internal_convert(
+                        deep_value,
                         case,
                         manual_renames,
                         rename_behavior,
-                    );
-
-                    let manual_case = CaseChanger::<'a>::determine_manual_case(
-                        key,
-                        &manual_renames,
-                        rename_behavior,
-                    );
-                    match manual_case {
-                        Some(k) => new_json.insert(k.to_owned(), Value::Object(inner_obj)),
-                        None => new_json.insert(key.to_case(case), Value::Object(inner_obj)),
-                    };
+                    ));
                 }
-                (key, Value::Array(elem)) => {
-                    let mut inner_arr: Vec<Value> = Vec::new();
 
-                    for i in elem.iter() {
-                        i.as_object().and_then(|actual| {
-                            let mut inner_obj = Map::<String, Value>::new();
-
-                            CaseChanger::<'a>::internal_convert(
-                                actual,
-                                &mut inner_obj,
+                Value::Array(deep_arr)
+            }
+            Value::Object(actual_json) => {
+                let mut new_json = JsonMap::new();
+                for (key, value) in actual_json.iter() {
+                    match (key, value) {
+                        (key, Value::Object(elem)) => {
+                            let inner_obj = CaseChanger::internal_convert(
+                                Value::Object(elem.clone()),
                                 case,
-                                &manual_renames,
+                                manual_renames,
                                 rename_behavior,
                             );
 
-                            inner_arr.push(Value::Object(inner_obj));
-                            Some(())
-                        });
+                            let manual_case = CaseChanger::determine_manual_case(
+                                key,
+                                &manual_renames,
+                                rename_behavior,
+                            );
+                            match manual_case {
+                                Some(k) => new_json.insert(k.to_owned(), inner_obj),
+                                None => new_json.insert(key.to_case(case), inner_obj),
+                            };
+                        }
+                        (key, Value::Array(elem)) => {
+                            let mut inner_arr: Vec<Value> = Vec::new();
+
+                            for obj in elem.iter() {
+                                let inner_obj = CaseChanger::internal_convert(
+                                    obj.clone(),
+                                    case,
+                                    manual_renames,
+                                    rename_behavior,
+                                );
+
+                                inner_arr.push(inner_obj);
+                            }
+                            let manual_case = CaseChanger::determine_manual_case(
+                                key,
+                                &manual_renames,
+                                rename_behavior,
+                            );
+                            match manual_case {
+                                Some(k) => new_json.insert(k.to_owned(), Value::Array(inner_arr)),
+                                None => new_json.insert(key.to_case(case), Value::Array(inner_arr)),
+                            };
+                        }
+                        (key, value) => {
+                            let manual_case = CaseChanger::determine_manual_case(
+                                key,
+                                &manual_renames,
+                                rename_behavior,
+                            );
+                            match manual_case {
+                                Some(k) => new_json.insert(k.to_owned(), value.clone()),
+                                None => new_json.insert(key.to_case(case), value.clone()),
+                            };
+                        }
                     }
-                    let manual_case = CaseChanger::<'a>::determine_manual_case(
-                        key,
-                        &manual_renames,
-                        rename_behavior,
-                    );
-                    match manual_case {
-                        Some(k) => new_json.insert(k.to_owned(), Value::Array(inner_arr)),
-                        None => new_json.insert(key.to_case(case), Value::Array(inner_arr)),
-                    };
                 }
-                (key, value) => {
-                    let manual_case = CaseChanger::<'a>::determine_manual_case(
-                        key,
-                        &manual_renames,
-                        rename_behavior,
-                    );
-                    match manual_case {
-                        Some(k) => new_json.insert(k.to_owned(), value.clone()),
-                        None => new_json.insert(key.to_case(case), value.clone()),
-                    };
-                }
+
+                Value::Object(new_json)
             }
+            value => value.clone(),
         }
     }
 
@@ -165,7 +173,7 @@ mod tests {
         let value = json!([{"myCamel": 1}, {"myCamel": 2}]);
         let expected = json!([{"my_camel": 1}, {"my_camel": 2}]);
 
-        let case_changed = CaseChanger::new(&value, Case::Snake).unwrap().convert();
+        let case_changed = CaseChanger::new(value, Case::Snake).unwrap().convert();
 
         assert_eq!(expected, case_changed);
     }
@@ -178,7 +186,7 @@ mod tests {
         // modifications.
         let expected = json!({"an_array": ["ObjectOne", "ObjectTwo"]});
 
-        let case_changed = CaseChanger::new(&value, Case::Snake).unwrap().convert();
+        let case_changed = CaseChanger::new(value, Case::Snake).unwrap().convert();
 
         assert_eq!(expected, case_changed);
     }
